@@ -141,6 +141,7 @@ function! s:set_tag()
 endfunction
 
 " Main: "{{{1
+" This is test
 augroup QuickTag
     autocmd!
     autocmd CursorHold,CursorHoldI *.rb,*.py,*.lua,*.sh,*.vim silent QuickTagUpdate
