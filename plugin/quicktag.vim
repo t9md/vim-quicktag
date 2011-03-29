@@ -142,6 +142,9 @@ endfunction
 
 " Main: "{{{1
 " This is test
+" This is test
+" This is test
+" This is test
 augroup QuickTag
     autocmd!
     autocmd CursorHold,CursorHoldI *.rb,*.py,*.lua,*.sh,*.vim silent QuickTagUpdate
