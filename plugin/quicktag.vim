@@ -10,100 +10,100 @@
 " if exists('g:loaded_quicktag')
   " finish
 " endif
-" let g:loaded_quicktag = 1
+let g:loaded_quicktag = 1
 
 "for line continuation - i.e dont want C in &cpo
 let s:old_cpo = &cpo
 set cpo&vim
 "}}}
 
-function! s:set_default(varname, default) "{{{
-  if !exists(a:varname)
-    let {a:varname} = a:default
-  endif
-endfunction"}}}
+" Setup:"{{{
+"==================================================================
+if !exists('g:quicktag_debug')
+    let g:quicktag_debug = 0
+endif
 
 let g:quicktag = {}
-let s:quicktag_default_opt = {
+let s:quicktag_default_opt = { 
             \ 'basedir': "~/.vim/quicktag",
-            \ 'debug': 0,
-            \ }
+            \ } 
 
-function! s:setup()
+let s:exclude_patterns = [
+            \ '\.svn/',
+            \ '\.git/',
+            \ ]
+
+function! s:setup()"{{{
     call extend(g:quicktag, s:quicktag_default_opt, "keep")
     let g:quicktag.statusfile = g:quicktag.basedir . "/status"
-endfunction
+endfunction"}}}
 call s:setup()
-
-" Utils: module
+"}}}
+" Utils: module"{{{
 "==================================================================
 let s:utils = {}
-function! s:utils.normalize(file)
+function! s:utils.normalize(file)"{{{
     return fnamemodify(a:file, ":p:~")
-endfunction
-function! s:utils.uniq(list)
+endfunction"}}}
+function! s:utils.uniq(list)"{{{
   let dic = {}
   for e in a:list | let dic[e] = 1 | endfor
   return keys(dic)
-endfunction
-
+endfunction"}}}
+"}}}
 " Environment: "{{{
 "=================================================================
 let s:env = {}
 function! s:env.new()
     let env =  {
                 \ 'path': expand("%:p"),
-                \ 'tagfile': expand(g:quicktag.basedir ."/".&filetype . ".tags")
+                \ 'tagfile': s:tagfile_path()
                 \ }
     return env
 endfunction
 "}}}
-"==================================================================
-" Object:
+" Object:"{{{
 "==================================================================
 let s:object = {}
-function! s:object.debug(msg)
-    if !g:quicktag.debug | return | endif
+function! s:object.debug(msg)"{{{
+    if !g:quicktag_debug | return | endif
     echo "[".self.name."] " . string(a:msg)
-endfunction
+endfunction"}}}
 
-function! s:object.new(name)
+function! s:object.new(name)"{{{
     let instance = {}
     let instance.name = a:name
     call extend(instance, self, 'keep')
     call remove(instance, 'new')
     return instance
-endfunction
+endfunction"}}}
 
+"}}}
 " Status: "{{{
 "==================================================================
-let s:status =  s:object.new("status")
-let s:status = { 'path': g:quicktag.statusfile }
+let s:status = s:object.new("status")
+let s:status.path = g:quicktag.statusfile
 
 function! s:status.init()"{{{
     let self.files = self.load()
-    " call self.debug("load finish")
-    " call self.debug(self.files)
 endfunction"}}}
-
 function! s:status.dump()"{{{
     call writefile([string(self.files)], expand(self.path))
 endfunction"}}}
-
 function! s:status.load()"{{{
     try
-        return eval(readfile(expand(self.path))[0])
+        let status = eval(readfile(expand(self.path))[0])
+        call filter(status, 'filereadable(v:key)')
+        return status
     catch
         return {}
     endtry
 endfunction"}}}
-
 function! s:status.update(file)"{{{
     " call self.debug(a:file)
     let self.files[a:file] = getftime(expand(a:file))
-    call self.debug(self.files)
+    " call self.debug(self.files)
 endfunction"}}}
-
 function! s:status.get(file)"{{{
     return get(self.files, a:file, 0)
 endfunction"}}}
@@ -112,95 +112,119 @@ function! s:status.is_updated(file)"{{{
     return getftime(a:file) != self.get(a:file)
 endfunction"}}}
 " }}}
-
-" Quicktag: "{{{
+" Controller: "{{{
 "=================================================================
-let g:quicktag.debug = 1
-let s:quicktag = s:object.new("quicktag")
+let s:controller = s:object.new("controller")
 
-function! s:quicktag.main()"{{{
-    let self.env = s:env.new()
-    call self.debug(self.env)
-    " call s:status.update(self.env.path)
-    " call s:status.get(self.env.path)
-    " echo s:status.is_updated(self.env.path)
-endfunction"}}}
-
-function! s:quicktag.generate()"{{{
+function! s:controller.generate()"{{{
     let cmd = self.ctags_command()
     call self.debug(cmd)
     call system(cmd)
 endfunction"}}}
 
-function! s:quicktag.finish()"{{{
+function! s:controller.finish()"{{{
     call s:status.dump()
 endfunction"}}}
 
-function! s:quicktag.ctags_command()"{{{
+function! s:controller.ctags_command()"{{{
     return 'ctags -f ' . self.env.tagfile . " -a " . self.env.path
 endfunction"}}}
 
-function! s:quicktag.update()"{{{
+function! s:controller.setenv()"{{{
+    let self.env = s:env.new()
+endfunction"}}}
+
+function! s:controller.update()"{{{
+    if empty(&filetype) | return | endif
+
+    call self.setenv()
+
+    for pattern in s:exclude_patterns
+        if match(self.env.path, pattern) != -1
+            return
+        endif
+    endfor
+
+    call self.debug(self.env.path)
+
     if s:status.is_updated(self.env.path)
-        call self.cleanup()
+        call self.clean()
         call self.generate()
+        call s:status.update(self.env.path)
         echo "Updated"
     else
         echo "No updated"
     endif
-    " if exists('g:underlinetag_autoupdate') && g:underlinetag_autoupdate
-        " call underlinetag#do(1)
+endfunction"}}}
+
+function! s:controller.clean()"{{{
+    let tagfile = self.env.tagfile
+    let cfile   = self.env.path
+
+    if !filereadable(tagfile) | return | endif
+    let lines = readfile(tagfile)
+
+    " remove lines for current file
+    call filter(lines, 'split(v:val, "\t")[1] !=# cfile')
+
+    " remove unreadable files from tagfile
+    call filter(lines, 'filereadable(split(v:val, "\t")[1])')
+    call writefile(lines, self.env.tagfile)
+endfunction"}}}
+
+" function! s:controller.clean(...)"{{{
+    " let files = len(a:0) == 0 ? [self.env.path] : a:000
+
+    " if filereadable(self.env.tagfile)
+        " let lines = readfile(self.env.tagfile)
+        " for file in files
+            " call filter(lines, 'split(v:val, "\t")[1] !=# file')
+        " endfor
+    " else
+        " let lines = []
     " endif
-endfunction"}}}
+    " call writefile(lines, self.env.tagfile)
+" endfunction"}}}
 
-function! s:quicktag.cleanup(...)"{{{
-  if a:0 == 0
-    return
-  endif
-  if filereadable(self.env.tagfile)
-    let lines = readfile(self.tagfile)
-    for file in a:000
-      call filter(lines, 'split(v:val, "\t")[1] !=# file')
-    endfor
-  else
-    let lines = []
-  endif
-  call writefile(lines, self.env.tagfile)
-endfunction"}}}
-
-function! s:tag_filelist()"{{{
-  return s:uniq(map(taglist('.'), 'v:val.filename'))
-endfunction"}}}
-
+" function! s:controller.clean_missing()
+    " call self.setenv()
+    " let  missing = readfile(self.env.tagfile)
+    " call filter(missing, "v:val !~# '^!_TAG_' ")
+    " call map(missing, 'split(v:val, "\t")[1]')
+    " call filter(missing, '!filereadable(v:val)')
+    " if len(missing) > 0
+        " echo "cleaning missingfile:"
+        " echo join(missing, "\n")
+        " call call(self.clean, missing, self)
+    " endif
+" endfunction
 " }}}
-finish
-call s:quicktag.init()
-call s:status.init()
-call s:quicktag.main()
-let g:QuickTag = s:quicktag
+
+function! s:tagfile_path()
+    return expand(g:quicktag.basedir ."/". &filetype . ".tags")
+endfunction
 
 function! s:set_tag()
   if empty(&ft) || filereadable('tags')
     return
   endif
-  exe 'setlocal tags+='.s:tagfile_name()
+  exe 'setlocal tags+='.s:tagfile_path()
 endfunction
 
-finish
+let g:QuickTag = s:controller
+
 " Main: "{{{1
+call s:status.init()
 augroup QuickTag
     autocmd!
-    " autocmd CursorHold,CursorHoldI *.pl,*.rb,*.py,*.lua,*.sh,*.vim silent QuickTagUpdate
-    " autocmd VimLeave * call <SID>quicktag.finish()
-    " autocmd BufNewFile,BufReadPost * call <SID>set_tag()
+    autocmd CursorHold,CursorHoldI *.pl,*.rb,*.py,*.lua,*.sh,*.vim silent QuickTagUpdate
+    autocmd VimLeave * call QuickTag.finish()
+    autocmd BufNewFile,BufReadPost * call <SID>set_tag()
 augroup END
-call s:quicktag_init()
 
 " Command: "{{{1
-command! QuickTagUpdate  :call g:QuickTag.update(expand('%:p'))
-command! QuickTagCleanUp :call g:QuickTag.cleanup_missing()
-"reset &cpo back to users setting
+command! QuickTagUpdate  :call g:QuickTag.update()
 
+"reset &cpo back to users setting
 let &cpo = s:old_cpo
-nnoremap <Space>R :<C-u>QuickTagUpdate<CR>
 " vim: foldmethod=marker
