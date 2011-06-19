@@ -1,6 +1,9 @@
-function! quicktag#update()
+function! quicktag#update()"{{{
     call quicktag#controller#update()
-endfunction
-function! quicktag#finish()
+endfunction"}}}
+
+function! quicktag#finish()"{{{
     call quicktag#controller#finish()
-endfunction
+endfunction"}}}
+
+" vim: foldmethod=marker

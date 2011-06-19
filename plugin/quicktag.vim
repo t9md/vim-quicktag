@@ -5,7 +5,7 @@
 " License: BSD
 " Version: 0.1
 
-" GUARD: {{{
+" GUARD: {{{1
 "============================================================
 " if exists('g:loaded_quicktag')
   " finish
@@ -15,9 +15,7 @@ let g:loaded_quicktag = 1
 "for line continuation - i.e dont want C in &cpo
 let s:old_cpo = &cpo
 set cpo&vim
-"}}}
-
-" Setup:"{{{
+" Setup: {{{1
 "==================================================================
 if !exists('g:quicktag_debug')
     let g:quicktag_debug = 0
@@ -39,8 +37,7 @@ function! s:setup()"{{{
 endfunction"}}}
 
 call s:setup()
-"}}}
-
+" Utils: {{{1
 function! s:tagfile_path()
     return expand(g:quicktag.basedir ."/". &filetype . ".tags")
 endfunction
@@ -52,8 +49,7 @@ function! s:set_tags()
   exe 'setlocal tags+='.s:tagfile_path()
 endfunction
 
-
-" Main:
+" Main: {{{1
 augroup QuickTag
     autocmd!
     autocmd CursorHold,CursorHoldI *.pl,*.rb,*.py,*.lua,*.sh,*.vim silent QuickTagUpdate
@@ -61,9 +57,9 @@ augroup QuickTag
     autocmd BufNewFile,BufReadPost * call <SID>set_tags()
 augroup END
 
-" Command:
+" Command: {{{1
 command! QuickTagUpdate  :call quicktag#update()
 
-"reset &cpo back to users setting
+"reset &cpo back to users setting {{{1
 let &cpo = s:old_cpo
 " vim: foldmethod=marker
