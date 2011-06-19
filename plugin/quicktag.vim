@@ -107,7 +107,6 @@ endfunction"}}}
 function! s:status.get(file)"{{{
     return get(self.files, a:file, 0)
 endfunction"}}}
-
 function! s:status.is_updated(file)"{{{
     return getftime(a:file) != self.get(a:file)
 endfunction"}}}
